@@ -2,34 +2,51 @@
 
 pragma solidity ^0.8.26;
 
-import {AggregatorV3Interface} from "@chainlink/contracts@1.1.1/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
+import {PriceConverter} from "contracts/PriceConverter.sol";
+
+
 
 contract FundMe {
 
     uint public  minimumusd = 5e18;
+    address[] public funders;
+    mapping(address funder => uint amount) public funderToAmount;
+    address public owner ;
+
+
+    constructor(){
+         owner = msg.sender;
+    }
+
+    modifier onlyOwner(){
+       require(msg.sender == owner, "Must be Owner");
+       _;
+    }
+
+
     
     function fund() public payable {
-
-        require( getConversionRate(msg.value) >= minimumusd);
-
+        require( PriceConverter.getConversionRate((msg.value)) >= minimumusd);
+        funders.push(msg.sender);
+        funderToAmount[msg.sender]+=msg.value;
     }
 
-    // function withdraw() public {}
+    function withdraw() public onlyOwner{
+        
+        // for(starting index, ending index, step amount){ perform this operation }
+        for (uint i = 0; i < funders.length; i++){
+            address funder = funders[i];
+            funderToAmount[funder] = 0; //this is use to reset the value of each address to zero
+        }
+        
+        funders = new address[](0); // this is use to reset the array to zero 
 
-    function getPrice() public view returns (uint) {
-        //get address : 0x694AA1769357215DE4FAC081bf1f309aDC325306
-        // ABI
-
-        AggregatorV3Interface priceFeaed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
-         ( , int256 price,,,) = priceFeaed.latestRoundData(); //Price of ETH in usd
-
-         return uint (price * 1e10); //Eth price always comes with 8 decimal place, but msg.value has 18 decimal place , we multiply by 1e10 to equate with msg.value
-
+         //withdraw
+        (bool callSucess,) = payable (msg.sender).call{value: address(this).balance}("");
+        require(callSucess, "call failed");
+    
     }
 
-    function getConversionRate(uint256 ethAmount) public view returns(uint) {
-        uint ethPrice = getPrice();
-        uint ethAmountInUsd = (ethPrice * ethAmount)/1e18;
-        return  ethAmountInUsd;
-    }
+   
 }
